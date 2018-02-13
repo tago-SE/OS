@@ -15,10 +15,10 @@ int main(int argc, char* argv[]){
     printf("argc= %d\n", argc);
     printf("Arguments:\n");
     for (i = 1; i < argc; i++) {
-    num = atoi(argv[i]);
-    if ((num == 0 && isDigit(argv[i][0])) || num != 0) {
-      printf("number: %d\n", num);
-      }
+        num = atoi(argv[i]);
+        if ((num == 0 && isDigit(argv[i][0])) || num != 0) {
+        printf("number: %d\n", num);
+        }
     else {
       printf("word: %s\n", argv[i]);
     }
