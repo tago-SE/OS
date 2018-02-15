@@ -11,7 +11,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#define SOCK_PATH "/home/me/echo_socket"
+#define SOCK_PATH "/tmp/echo_socket"
 
 int main(void)
 {

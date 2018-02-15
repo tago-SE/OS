@@ -13,7 +13,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#define SOCK_PATH "/home/me/echo_socket"
+#define SOCK_PATH "/tmp/echo_socket"
 
 reverse(char *str)
 {
@@ -31,6 +31,35 @@ void sigchld_handler(int s)
 
 int main(void)
 {
+    pid_t pid, sid;
+
+    pid = fork();
+
+    if (pid < 0) {
+        perror("Could not fork!");
+    } else if (pid > 0) {
+        exit(0);
+    }
+
+    printf("Hello im child under init\n");
+
+    //now under init
+
+    umask(0);
+    sid = setsid();
+    if (sid < 0) {
+        exit(EXIT_FAILURE);
+    }
+
+    if ((chdir("/")) < 0) {
+        exit(EXIT_FAILURE);
+    }
+
+    freopen("dev/null", "r", stdin);
+    freopen("dev/null", "w", stdout);
+    freopen("dev/null", "w", stderr);
+
+
 	int s, s2, len;
 	unsigned t;
 	struct sockaddr_un local, remote;
@@ -68,43 +97,35 @@ int main(void)
 
 		switch(fork()) {
             case 0:
-                switch(fork()) {
-                    case 0:
-                        printf("Connected.\n");
+                printf("Connected.\n");
 
-                        done = 0;
-                        do {
-                            n = recv(s2, str, 100, 0);
-                            if (n <= 0) {
-                                if (n < 0) perror("recv");
-                                done = 1;
-                            }
+                done = 0;
+                do {
+                    n = recv(s2, str, 100, 0);
+                    if (n <= 0) {
+                        if (n < 0) perror("recv");
+                        done = 1;
+                    }
 
-                            printf("string: %s\n", str);
-                            reverse(str);
-                            printf("string reversed: %s\n", str);
-
-                            if (!done)
-                                if (send(s2, str, n, 0) < 0) {
-                                    perror("send");
-                                    done = 1;
-                                }
-                        } while (!done);
-
-                        close(s2);
-                }
-            wait(0);
-            exit(0);
-		}
-		                        struct sigaction sa;
-                        sa.sa_handler = sigchld_handler; // reap all dead processes
-                        sigemptyset(&sa.sa_mask);
-                        sa.sa_flags = SA_RESTART;
-                        if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-                            perror("sigaction");
-                            exit(1);
+                    if (!done)
+                        if (send(s2, str, n, 0) < 0) {
+                            perror("send");
+                            done = 1;
                         }
+                } while (!done);
 
+                close(s2);
+                exit(0);
+        }
+
+        struct sigaction sa;
+        sa.sa_handler = sigchld_handler; // reap all dead processes
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = SA_RESTART;
+        if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+            perror("sigaction");
+            exit(1);
+        }
 	}
 
 	return 0;
