@@ -14,62 +14,112 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <stdbool.h>
 
 #define MSG_CLIENT_QUIT     "q client"
 #define MSG_SERVER_QUIT     "q server"
 
 
 #define EXEC_CMD2           "/home/me/server/exec_cmd2"
-#define KILL_SERVER         "/home/me/server/igcckill_server"
+#define KILL_SERVER         "/home/me/server/ikill_server"
+#define SERVER_PATH         "/home/me/server/"
+#define SERVER_PID_PATH     "/home/me/server/echos.txt"
+
 
 #define PORT "3490"  // the port users will be connecting to
 
 #define BACKLOG 10     // how many pending connections queue will hold
 
-void sigchld_handler(int s)
+
+bool validate_server_pid(int pid) {
+    char str[60];
+    int f_pid;
+    FILE *fptr = fopen(SERVER_PID_PATH, "r+");
+    if(fptr == NULL) {
+        perror("Error opening file");
+        return false;
+    }
+    if( fgets (str, 60, fptr)!=NULL ) {
+        f_pid = atoi(str);
+    }
+    fclose(fptr);
+    return f_pid == pid;
+}
+
+int save_server() {
+    FILE *fptr = fopen(SERVER_PID_PATH,"w");
+    if(fptr == NULL) {
+        perror("Error opening file");
+        return -1;
+    }
+    fprintf(fptr, "%d", getpid());
+    fclose(fptr);
+}
+
+int kill_server() {
+    if(!fork()) {
+        execlp(KILL_SERVER, "./ikill_server", NULL);
+        perror("exec ikill_server");
+        exit(EXIT_FAILURE);
+    }
+}
+
+
+void sig_handler(int s)
 {
     // waitpid() might overwrite errno, so we save and restore it:
     int saved_errno = errno;
 
-    while(waitpid(-1, NULL, WNOHANG) > 0);
-
-    errno = saved_errno;
-}
-
-
-// get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
-{
-    if (sa->sa_family == AF_INET) {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
+    if (s == SIGINT) {
+       // if (validate_server_pid(getpid())) {
+            printf("\nServer terminated: %d\n", getpid());
+            //killpg(pid, SIGINT);
+        //}
+        exit(0);
     }
-
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+    else if (s == SIGCHLD) {
+        while(waitpid(-1, NULL, WNOHANG) > 0);
+    }
 }
-// ===================================================================================================
 
-int kill_server() {
-    if(!fork()) {
-        /* Change current working directory
-        if ((chdir(SERVER_PATH)) <  0) {
-            perror("chdir kill_server");
-            exit(EXIT_FAILURE);
-        }
-        */
-        execlp(KILL_SERVER, "./kill_server", NULL);
-        perror("exec kill_server");
+
+static void deamonize() {
+    pid_t pid, sid;
+    if (getpid() == 1) return; // already a daemon
+
+    pid = fork();
+    if (pid > 0)
         exit(EXIT_FAILURE);
-    }
-    wait(0);
+    if (pid > 0)
+        exit(EXIT_SUCCESS);
+
+    /* Inside child process */
+    umask(0); // Change the filemode mask
+
+    /* Create a new session id for the process */
+    sid = setsid();
+    if (sid < 0)
+        exit(EXIT_FAILURE);
+
+    /* Change current working directory */
+    if ((chdir(SERVER_PATH)) <  0)
+        exit(EXIT_FAILURE);
+
+    /* Redirect standard files to /dev/null
+    freopen("/dev/null", "r", stdin);
+    freopen("/dev/null", "w", stdout);
+    freopen("/dev/null", "w", stderr);
+    */
 }
+
 
 void handle_client(int client_socket_fd) {
     int done = 0, len;
     char recv_msg[100], send_msg[100];
-    printf("client handler!\n");
+    printf("client handler started...\n");
     do {
         len = recv(client_socket_fd, recv_msg, 100, 0);
-        printf("client_handler: %s\n", recv_msg);
+        printf("recv: %s\n", recv_msg);
         if (len <= 0) {
             if (len < 0)
                 perror("recv");
@@ -89,17 +139,10 @@ void handle_client(int client_socket_fd) {
                     dup(client_socket_fd);
                     close(2);
                     dup(client_socket_fd);
-                      /* Change current working directory *
-                    if ((chdir(SERVER_PATH)) <  0) {
-                        perror("chdir handle_client");
-                        exit(EXIT_FAILURE);
-                    }
-                    */
                     execlp(EXEC_CMD2, "./exec_cmd2", recv_msg, NULL);
                     perror("exec_cmd2");
                     exit(EXIT_FAILURE);
                 }
-                wait(0);
             }
         }
     } while(!done);
@@ -107,13 +150,44 @@ void handle_client(int client_socket_fd) {
 
 // ===================================================================================================
 
+// get sockaddr, IPv4 or IPv6:
+void *get_in_addr(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET) {
+        return &(((struct sockaddr_in*)sa)->sin_addr);
+    }
+
+    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+
 int main(void)
 {
+    struct sigaction sa;
+    sa.sa_handler = sig_handler; // reap all dead processes
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+        perror("sigaction SIGCHLD");
+        exit(1);
+    }
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("sigaction SIGINT");
+        exit(1);
+    }
+
+    /* Deamonize this process */
+    deamonize();
+
+    /* Save server pid */
+    printf("Served started on: %d\n", getpid());
+    save_server();
+
+
     int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
     struct addrinfo hints, *servinfo, *p;
     struct sockaddr_storage their_addr; // connector's address information
     socklen_t sin_size;
-    struct sigaction sa;
     int yes=1;
     char s[INET6_ADDRSTRLEN];
     int rv;
@@ -163,14 +237,6 @@ int main(void)
         exit(1);
     }
 
-    sa.sa_handler = sigchld_handler; // reap all dead processes
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
-    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-        perror("sigaction");
-        exit(1);
-    }
-
     printf("server: waiting for connections...\n");
 
     while(1) {  // main accept() loop
@@ -187,12 +253,8 @@ int main(void)
         printf("server: got connection from %s\n", s);
 
         if (!fork()) { // this is the child process
-            printf("before\n");
             close(sockfd); // child doesn't need the listener
-            printf("after\n");
             handle_client(new_fd);
-            //if (send(new_fd, "Hello, world!", 13, 0) == -1)
-            //    perror("send");
             close(new_fd);
             exit(0);
         }

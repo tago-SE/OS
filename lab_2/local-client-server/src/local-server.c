@@ -65,6 +65,7 @@ void sig_handler(int sig) {
     if (sig == SIGINT) {
         if (validate_server_pid(getpid())) {
             printf("Server terminated: %d\n", getpid());
+            killpg(pid, SIGINT);
         }
         exit(0);
     }
@@ -102,7 +103,6 @@ static void deamonize() {
     freopen("/dev/null", "w", stdout);
     freopen("/dev/null", "w", stderr);
     */
-
 }
 
 void handle_client(int client_socket_fd) {

@@ -71,11 +71,14 @@ int main(int argc, char* argv[]) {
     #endif
 
     if (strcmp(argv[1], "cd") == 0) {
+        printf("CD change requested... %s\n", argv[2]);
+        /*
         if (chdir(argv[2]) != 0) {
             perror("cd");
             exit(EXIT_FAILURE);
         }
         printf("cd: "); showCwd();
+        */
         exit(EXIT_SUCCESS);
     }
     else if (strcmp(argv[1], "pwd") == 0) {
