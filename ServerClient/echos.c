@@ -31,34 +31,14 @@ void sigchld_handler(int s)
 
 int main(void)
 {
-    pid_t pid, sid;
-
-    pid = fork();
-
-    if (pid < 0) {
-        perror("Could not fork!");
-    } else if (pid > 0) {
-        exit(0);
+    struct sigaction sa;
+    sa.sa_handler = sigchld_handler; // reap all dead processes
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(1);
     }
-
-    printf("Hello im child under init\n");
-
-    //now under init
-
-    umask(0);
-    sid = setsid();
-    if (sid < 0) {
-        exit(EXIT_FAILURE);
-    }
-
-    if ((chdir("/")) < 0) {
-        exit(EXIT_FAILURE);
-    }
-
-    freopen("dev/null", "r", stdin);
-    freopen("dev/null", "w", stdout);
-    freopen("dev/null", "w", stderr);
-
 
 	int s, s2, len;
 	unsigned t;
@@ -79,8 +59,6 @@ int main(void)
 		exit(1);
 	}
 
-	printf("step 1 done\n");
-
 	if (listen(s, 5) == -1) {
 		perror("listen");
 		exit(1);
@@ -99,6 +77,7 @@ int main(void)
             case 0:
                 printf("Connected.\n");
 
+                close(s);
                 done = 0;
                 do {
                     n = recv(s2, str, 100, 0);
@@ -108,6 +87,10 @@ int main(void)
                     }
 
                     if (!done)
+                        printf("Recieved: %s\n", str);
+                        reverse(str);
+                        printf("Reversed: %s\n", str);
+
                         if (send(s2, str, n, 0) < 0) {
                             perror("send");
                             done = 1;
@@ -117,15 +100,7 @@ int main(void)
                 close(s2);
                 exit(0);
         }
-
-        struct sigaction sa;
-        sa.sa_handler = sigchld_handler; // reap all dead processes
-        sigemptyset(&sa.sa_mask);
-        sa.sa_flags = SA_RESTART;
-        if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-            perror("sigaction");
-            exit(1);
-        }
+        close(s2);
 	}
 
 	return 0;
