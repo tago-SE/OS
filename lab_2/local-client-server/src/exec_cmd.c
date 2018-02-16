@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <string.h>
 
+#define DEBUG_ENABLED 0
 
 void showCwd() {
     char cwd[200];
@@ -17,25 +18,28 @@ void showCwd() {
 int main(int argc, char* argv[]) {
 
     char cmd[255];
+    cmd[0] = '\0';
     int i;
     for (i = 1; i < argc; i++) {
         strcat(cmd, argv[i]);
         strcat(cmd, " ");
     }
+
+    #if DEBUG_ENABLED
     printf("Command:%s \n", cmd);
+    #endif
 
     if (strcmp(argv[1], "cd") == 0) {
         if (chdir(argv[2]) != 0) {
             perror("cd");
             exit(-1);
         } else {
-            printf("cwd is: "); showCwd(); printf("\n");
+            printf("cd: "); showCwd();
         }
         exit(1);
     }
     else if (strcmp(argv[1], "pwd") == 0) {
-        printf("here we are...\n");
-        showCwd();
+        printf("pwd: "); showCwd();
         exit(1);
     }
     switch(fork()) {

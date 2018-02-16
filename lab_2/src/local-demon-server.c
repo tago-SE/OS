@@ -5,6 +5,9 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#define READ    0
+#define WRITE   1
+
 static void deamonize() {
     pid_t pid, sid;
     if (getpid() == 1) return; // already a daemon
@@ -38,6 +41,9 @@ static void deamonize() {
 void exec_command(char* command) {
     switch(fork()) {
         case 0:
+           // close(WRITE);
+
+            printf("exec command %s...", command);
             execlp("/bin/sh", "sh", "-c", command, NULL);
             perror("exec");
             exit(EXIT_FAILURE);
@@ -48,7 +54,7 @@ void exec_command(char* command) {
     wait(0);
 }
 
-int clientHandler(int client_socket) {
+int clientHandler(int client_socket_fd) {
     printf("Handing a client...\n");
     while(1) {
         int length;
@@ -59,21 +65,36 @@ int clientHandler(int client_socket) {
 
         text = (char*) malloc(length);
 
+
         read(client_socket, text, length);
 
-        exec_command(text);
+        if (strcmp(text, "quit") == 0) {
+            printf("client sent quit msg\n");
+        }
 
-        free(text);
+        // Quit client
         if (!strcmp(text, "quit"))
             exit(EXIT_FAILURE);
 
+        exec_command(text);
+
+        write(socket_fd, "hello", sizeo(char)*10);
+
+        free(text);
     }
+    close(client_socket_fd);
 }
 
 void main(int argc, char* argv[]) {
 
     /* Deamonize this process */
     deamonize();
+    printf("pid: %d\n", getpid());
+
+    /* Saving pid into file (in working directory) for later use */
+    FILE *fptr = fopen("local-demon-server.txt","w");
+    fprintf(fptr, "%d", getpid());
+    fclose(fptr);
 
     /* Server related code */
 
@@ -95,6 +116,9 @@ void main(int argc, char* argv[]) {
         perror("bind");
         exit(EXIT_FAILURE);
     }
+
+   // printf("socket_name%s\n", name.sun_path);
+
     if (listen(socket_fd, 5) != 0) {
         perror("listen");
         unlink(socket_name);
@@ -107,17 +131,21 @@ void main(int argc, char* argv[]) {
         int sock_len = sizeof(client_name); // ersätter boken
 
         int client_socket_fd = accept(socket_fd, (struct sockaddr*) &client_name, &sock_len);
-        if (client_socket_fd < 0) {
-            perror("accept");
-            unlink(socket_name);
-            exit(EXIT_FAILURE);
+        if (!fork()) {
+            if (client_socket_fd < 0) {
+                perror("accept");
+                unlink(socket_name);
+                exit(EXIT_FAILURE);
+            }
+            clientHandler(client_socket_fd);
+            exit(0);
         }
 
-        client_sent_quit_message = clientHandler(client_socket_fd);
+        //client_sent_quit_message = clientHandler(client_socket_fd);
 
         close(client_socket_fd);
 
-    } while (!client_sent_quit_message);
+    } while (1);//(!client_sent_quit_message);
 
     close(socket_fd);
     unlink(socket_name);

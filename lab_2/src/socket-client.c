@@ -1,12 +1,19 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 #include <assert.h>
+#include <signal.h>
 
 
-void write_text (int socket_fd, const char* text) {
+
+char* recvMsg(int socket_fd) {
+
+}
+
+void sendMsg(int socket_fd, char* msg) {
     int length = strlen(text) + 1;
     write(socket_fd, &length, sizeof(length));
     write(socket_fd, text, length);
@@ -14,8 +21,6 @@ void write_text (int socket_fd, const char* text) {
 
 int main(int argc, char* argv[]) {
     const char* const socket_name = argv[1];
-    const char* const message = argv[2];
-
     int socket_fd;
     struct sockaddr_un name;
 
@@ -28,11 +33,20 @@ int main(int argc, char* argv[]) {
         perror("connect");
         return -1;
     }
-    printf("Connected");
+
+    printf("Connected to server...\n");
+
+    while (1) {
+        char * msg = malloc(sizeof(char)* 100);
+        printf("Client msg: ");
+        fgets(msg, 99, stdin);
+        sendMsg(socket_fd, msg);
+        free(msg);
+    }
 
 
-    write_text(socket_fd, message);
 
+    write_text(socket_fd, "quit");
     close(socket_fd);
 
 

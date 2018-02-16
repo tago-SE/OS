@@ -18,7 +18,7 @@ int main() {
     else {
         sleep(1);
         system("ps -o pid,ppid,comm");
-        sleep(35);
+        sleep(15);
         printf("I'm a parent process %d and my childs process is: %d\n", getpid(), pid);
     }
     return 0;
